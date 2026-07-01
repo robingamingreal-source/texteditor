@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Write</title>
+</head>
+<body>
+    <h1>Write in X-Write</h1>
+    <p>Start writing your text below:</p>
+    <textarea id="textArea" rows="20" cols="80"></textarea>
+    <br>
+    <button onclick="saveText()">Save Text</button>
+    <script>
+        function saveText() {
+            const text = document.getElementById('textArea').value;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my_text.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+<hr>
+<button onclick="window.location.href='index.html'">Back to Home</button>
+</body>
+</html>
