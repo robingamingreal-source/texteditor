@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>X-Write</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <h1>Write in X-Write</h1>
-    <p>Start writing your text below:</p>
+    <p><b>Start writing your text below:</b></p>
     <textarea id="textArea" rows="20" cols="80"></textarea>
     <br>
     <button onclick="saveText()">Save Text</button>
+    <br>
     <script>
         function saveText() {
             const text = document.getElementById('textArea').value;
