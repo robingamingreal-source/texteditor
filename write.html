@@ -12,6 +12,8 @@
     <textarea id="textArea" rows="20" cols="80"></textarea>
     <br>
     <button onclick="saveText()">Save Text</button>
+    <button onclick="document.getElementById('textArea').value = ''">Clear Text</button>
+    <button onclick="loadText()">Load Text</button>
     <br>
     <script>
         function saveText() {
@@ -23,6 +25,22 @@
             a.download = 'my_text.txt';
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        function loadText() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'text/plain';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('textArea').value = e.target.result;
+                };
+                reader.readAsText(file);
+            };
+            input.click();
         }
     </script>
 <hr>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Write</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Write in X-Write</h1>
+    <p><b>Start writing your text below:</b></p>
+    <textarea id="textArea" rows="20" cols="80"></textarea>
+    <br>
+    <button onclick="saveTextaspdf()">Save as PDF</button>
+    <button onclick="UploadImages()">Upload Images</button>
+    <button onclick="document.getElementById('textArea').value = ''">Clear Text</button>
+    <button onclick="loadText()">Load Text</button>
+    <br>
+    <script>
+        function saveTextaspdf() {
+            const text = document.getElementById('textArea').value || '';
+            const escapedText = text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+            const textLines = escapedText.split('\n');
+            const contentLines = textLines.map((line, index) => index === 0 ? `(${line}) Tj` : `T* (${line}) Tj`);
+            const contentStream = [
+                'BT',
+                '/F1 12 Tf',
+                '50 750 Td',
+                ...contentLines,
+                'ET'
+            ].join('\n');
+            const contentLength = new TextEncoder().encode(contentStream).length;
+            const pdfParts = [
+                '%PDF-1.1',
+                '1 0 obj',
+                '<< /Type /Catalog /Pages 2 0 R >>',
+                'endobj',
+                '2 0 obj',
+                '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+                'endobj',
+                '3 0 obj',
+                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+                'endobj',
+                '4 0 obj',
+                `<< /Length ${contentLength} >>`,
+                'stream',
+                contentStream,
+                'endstream',
+                'endobj',
+                '5 0 obj',
+                '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+                'endobj'
+            ];
+            let pdf = pdfParts.join('\n') + '\n';
+            const offsets = [
+                pdf.indexOf('1 0 obj'),
+                pdf.indexOf('2 0 obj'),
+                pdf.indexOf('3 0 obj'),
+                pdf.indexOf('4 0 obj'),
+                pdf.indexOf('5 0 obj')
+            ];
+            const xrefLines = ['xref', '0 6', '0000000000 65535 f '].concat(offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n `));
+            const xref = xrefLines.join('\n') + '\n';
+            const startxref = pdf.length + xref.length;
+            const trailer = ['trailer', '<< /Root 1 0 R /Size 6 >>', 'startxref', startxref, '%%EOF'].join('\n');
+            pdf += xref + trailer;
+            const blob = new Blob([pdf], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my_text.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function loadText() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'text/plain';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('textArea').value = e.target.result;
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function UploadImages() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.onchange = e => {
+                const files = e.target.files;
+                if (!files.length) return;
+                const textArea = document.getElementById('textArea');
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        const imgTag = `<img src="${e.target.result}" alt="${file.name}">`;
+                        textArea.value += `\n${imgTag}\n`;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            };
+            input.click();
+        }
+    </script>
+<hr>
+<button onclick="window.location.href='index.html'">Back to Home</button>
+</body>
+</html>

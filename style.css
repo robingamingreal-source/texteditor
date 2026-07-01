@@ -1,5 +1,5 @@
 body{
-    background: linear-gradient(to right, #10359a, #7239d5, #1247d9);
+    background: linear-gradient(to right, #0044ff, #5410cb);
     font-family: Arial, sans-serif;
     align-items: center;
     text-align: center;
@@ -33,8 +33,15 @@ hr {
     padding: 10px;
     border: 10px;
     border-radius: 10px;
-    box-shadow: 0 5px 6px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 10px 20px rgb(0, 157, 255);
+    margin: 20px 0;
     font-size: 16px;
     resize: none;
     background-color: #9c9c9c;
+   transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+} 
+#textArea:focus {
+    outline: none;
+    box-shadow: 0 10px 20px rgba(0, 157, 255, 0.8);
+    transform: scale(1.05);
 }
