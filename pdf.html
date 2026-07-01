@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Write</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        .pdf-page {
+            position: relative;
+            width: 210mm;
+            min-height: 297mm;
+            background-color: #ffffff;
+            border: 1px solid #d3d3d3;
+            margin: 0 auto 30px auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .dropzone {
+            width: 100%;
+            height: 100%;
+            min-height: 297mm;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+        .draggable-item {
+            cursor: grab;
+            padding: 10px;
+            margin-bottom: 5px;
+            background: #f0f0f0;
+            border: 1px dashed #ccc;
+        }
+        .draggable-item:active { cursor: grabbing; }
+
+        .dropped-element {
+            position: absolute;
+            cursor: move;
+            min-width: 50px;
+            min-height: 20px;
+            z-index: 20; 
+        }
+        .dropped-element.selected { outline: 2px dashed #ff0000; } 
+
+        .resize-handle {
+            width: 12px; height: 12px; background: #007bff; position: absolute; right: -6px; bottom: -6px; cursor: se-resize; border-radius: 2px; z-index: 30;
+        }
+
+        .dropped-element img,
+        .dropped-element .media-placeholder-audio,
+        .dropped-element .media-placeholder-video {
+            pointer-events: none; 
+            display: block;
+        }
+        .dropped-element [contenteditable="true"] {
+            pointer-events: auto;
+            cursor: text;
+        }
+
+        .gallery-img {
+            width: 80px; height: 80px; object-fit: cover;
+            cursor: grab; margin: 5px;
+        }
+
+        .overview-item {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background: #eee;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .overview-item.active { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="header-actions">
+        <div>
+            <h1>Write in X-Write</h1>
+            <p><b>PDF Builder</b></p>
+        </div>
+        <div>
+            <button class="btn btn-delete" onclick="deleteSelectedElement()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer;">Delete Element</button>
+            <button class="btn btn-add" onclick="addNewPage()">Add Page</button>
+            <button class="btn btn-export" onclick="exportToPDF()">Export PDF</button>
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="workspace" style="display: flex; gap: 20px;">
+        <div class="sidebar" style="width: 250px; flex-shrink: 0;">
+            <div class="section-title">Text Elements</div>
+            <div class="draggable-item" draggable="true" data-type="heading">Heading</div>
+            <div class="draggable-item" draggable="true" data-type="paragraph">Paragraph</div>
+            
+            <div class="section-title">Media</div>
+            <div class="draggable-item" draggable="true" data-type="audio">Audio Player</div>
+            <div class="draggable-item" draggable="true" data-type="video">Video Box</div>
+
+            <div class="section-title">Image Library</div>
+            <div class="upload-container" style="margin-bottom: 10px;">
+                <input type="file" id="file-upload-input" accept="image/*" multiple>
+            </div>
+            
+            <div class="image-gallery" id="library-previews"></div>
+        </div>
+
+        <div class="editor-area" id="pages-container" style="flex-grow: 1; overflow-y: auto; background: #f4f6f9; padding: 20px;">
+        </div>
+    </div>
+
+    <div class="pages-overview-container" style="margin-top: 30px; text-align: center;">
+        <hr>
+        <div class="section-title"><b>Pages Overview (Click to Jump)</b></div>
+        <div class="pages-overview" id="overview-list" style="padding: 10px;">
+        </div>
+    </div>
+
+    <hr>
+    <button class="btn btn-home" onclick="window.location.href='index.html'">Back to Home</button>
+
+    <script>
+        let pageCount = 0;
+        let draggedElement = null;
+        let isMoving = false;
+        let isResizing = false;
+        let activeMovingElem = null;
+        let offsetX = 0; let offsetY = 0;
+        let startWidth = 0, startHeight = 0, startX = 0, startY = 0;
+
+        function initializeDroppedElement(elem) {
+            elem.addEventListener('mousedown', function(e) {
+                if (e.target.hasAttribute('contenteditable')) return; 
+                if (e.target.classList && e.target.classList.contains('resize-handle')) return;
+
+                document.querySelectorAll('.dropped-element').forEach(el => el.classList.remove('selected'));
+                elem.classList.add('selected');
+
+                isMoving = true;
+                activeMovingElem = elem;
+                
+                const rect = elem.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                e.preventDefault(); 
+            });
+
+
+            let handle = elem.querySelector('.resize-handle');
+            if (!handle) {
+                handle = document.createElement('div');
+                handle.className = 'resize-handle';
+                elem.appendChild(handle);
+            }
+
+            handle.addEventListener('mousedown', function(e) {
+                e.stopPropagation();
+                isResizing = true;
+                activeMovingElem = elem;
+                const rect = elem.getBoundingClientRect();
+                startWidth = rect.width;
+                startHeight = rect.height;
+                startX = e.clientX;
+                startY = e.clientY;
+                document.querySelectorAll('.dropped-element').forEach(el => el.classList.remove('selected'));
+                elem.classList.add('selected');
+                e.preventDefault();
+            });
+        }
+
+        document.getElementById('file-upload-input').addEventListener('change', function(e) {
+            const files = e.target.files;
+            const previewContainer = document.getElementById('library-previews');
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (!file.type.startsWith('image/')) continue;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    img.className = 'gallery-img';
+                    img.setAttribute('draggable', 'true');
+                    img.setAttribute('data-type', 'image');
+                    img.setAttribute('data-src', event.target.result);
+
+                    img.addEventListener('dragstart', function(ev) {
+                        draggedElement = ev.target;
+                        ev.dataTransfer.setData('text/plain', '');
+                    });
+
+                    previewContainer.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.querySelectorAll('.sidebar .draggable-item').forEach(item => {
+            item.addEventListener('dragstart', function(e) {
+                draggedElement = e.target;
+                e.dataTransfer.setData('text/plain', '');
+            });
+        });
+
+        document.addEventListener('dragover', function(e) {
+            if (e.target.closest('.dropzone')) {
+                e.preventDefault(); 
+            }
+        });
+
+        document.addEventListener('drop', function(e) {
+            const dropzone = e.target.closest('.dropzone');
+            if (!dropzone || !draggedElement) return;
+            
+            e.preventDefault();
+            if (draggedElement.classList.contains('dropped-element')) return;
+
+            const rect = dropzone.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            createDroppedElement(draggedElement.getAttribute('data-type'), x, y, dropzone);
+        });
+
+        function createDroppedElement(type, x, y, dropzone) {
+            const newElem = document.createElement('div');
+            newElem.className = 'dropped-element';
+            newElem.style.left = x + 'px';
+            newElem.style.top = y + 'px';
+
+            if (type === 'heading') {
+                newElem.innerHTML = '<h2 contenteditable="true" style="margin:0;">Double-click to edit heading</h2>';
+            } else if (type === 'paragraph') {
+                newElem.innerHTML = '<p contenteditable="true" style="margin:0;">Double-click to write text...</p>';
+            } else if (type === 'image') {
+                const src = draggedElement.getAttribute('data-src');
+                newElem.innerHTML = `<img src="${src}" style="max-width:300px;">`;
+            } else if (type === 'audio') {
+                newElem.innerHTML = '<div class="media-placeholder-audio" style="padding:15px; background:#e9ecef; border:1px solid #ced4da; border-radius:8px;">🎵 Audio placeholder</div>';
+            } else if (type === 'video') {
+                newElem.innerHTML = '<div class="media-placeholder-video" style="width:300px; height:150px; background:#343a40; color:white; display:flex; align-items:center; justify-content:center; border-radius:8px;">📺 Video placeholder</div>';
+            }
+
+            initializeDroppedElement(newElem);
+            dropzone.appendChild(newElem);
+            saveToLocalStorage();
+        }
+
+        document.addEventListener('mousemove', function(e) {
+            if (isResizing && activeMovingElem) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                const newW = Math.max(30, startWidth + dx);
+                const newH = Math.max(20, startHeight + dy);
+                activeMovingElem.style.width = newW + 'px';
+                activeMovingElem.style.height = newH + 'px';
+                return;
+            }
+
+            if (!isMoving || !activeMovingElem) return;
+
+            const dropzone = activeMovingElem.closest('.dropzone');
+            const rect = dropzone.getBoundingClientRect();
+
+            let x = e.clientX - rect.left - offsetX;
+            let y = e.clientY - rect.top - offsetY;
+
+            activeMovingElem.style.left = x + 'px';
+            activeMovingElem.style.top = y + 'px';
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (isMoving) {
+                isMoving = false;
+                activeMovingElem = null;
+                saveToLocalStorage();
+            }
+            if (isResizing) {
+                isResizing = false;
+                activeMovingElem = null;
+                saveToLocalStorage();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+
+            if (!e.target.closest('.dropped-element') && !e.target.closest('.sidebar') && !e.target.closest('.btn-delete')) {
+                document.querySelectorAll('.dropped-element').forEach(el => el.classList.remove('selected'));
+            }
+        });
+
+
+        function deleteSelectedElement() {
+            const selectedElem = document.querySelector('.dropped-element.selected');
+            if (selectedElem) {
+                selectedElem.remove();
+                saveToLocalStorage();
+            } else {
+                alert("Bitte wähle zuerst ein Element auf der Seite aus, das du löschen möchtest.");
+            }
+        }
+
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                
+
+                if (e.target.hasAttribute('contenteditable') || e.target.isContentEditable) {
+                    return; 
+                }
+
+                const selectedElem = document.querySelector('.dropped-element.selected');
+                if (selectedElem) {
+                    e.preventDefault();
+                    selectedElem.remove();
+                    saveToLocalStorage();
+                }
+            }
+        });
+        function addNewPage() {
+            pageCount++;
+            const container = document.getElementById('pages-container');
+            
+            const newPage = document.createElement('div');
+            newPage.className = 'pdf-page';
+            newPage.id = `page-${pageCount}`;
+            newPage.setAttribute('data-page-num', pageCount);
+            newPage.innerHTML = `<div class="dropzone"></div>`;
+            
+            container.appendChild(newPage);
+            updateOverview();
+            saveToLocalStorage();
+            
+            scrollToPage(pageCount);
+        }
+
+        function updateOverview() {
+            const overviewList = document.getElementById('overview-list');
+            overviewList.innerHTML = '';
+            
+            for (let i = 1; i <= pageCount; i++) {
+                const thumb = document.createElement('div');
+                thumb.className = 'overview-item';
+                thumb.id = `thumb-page-${i}`;
+                thumb.innerText = `Page ${i}`;
+                
+                thumb.onclick = function() { scrollToPage(i); };
+                overviewList.appendChild(thumb);
+            }
+        }
+
+        function scrollToPage(pageNum) {
+            const page = document.getElementById(`page-${pageNum}`);
+            if (page) {
+                page.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                document.querySelectorAll('.overview-item').forEach(item => item.classList.remove('active'));
+                const currentThumb = document.getElementById(`thumb-page-${pageNum}`);
+                if (currentThumb) currentThumb.classList.add('active');
+            }
+        }
+
+        function exportToPDF() {
+            document.querySelectorAll('.dropped-element').forEach(el => el.classList.remove('selected'));
+            const element = document.getElementById('pages-container');
+            const opt = {
+                margin:       0,
+                filename:     'x-write-document.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function saveToLocalStorage() {
+            const galleryContent = document.getElementById('library-previews').innerHTML;
+            localStorage.setItem('x_write_gallery_backup', galleryContent);
+        }
+
+        window.onload = function() {
+            addNewPage();
+            const savedGallery = localStorage.getItem('x_write_gallery_backup');
+            
+            if(savedGallery) {
+                const previewContainer = document.getElementById('library-previews');
+                previewContainer.innerHTML = savedGallery;
+                previewContainer.querySelectorAll('.gallery-img').forEach(img => {
+                    img.addEventListener('dragstart', function(ev) {
+                        draggedElement = ev.target;
+                        ev.dataTransfer.setData('text/plain', '');
+                    });
+                });
+            }
+
+            if(savedContent && savedCount && parseInt(savedCount) > 0) {
+                document.getElementById('pages-container').innerHTML = savedContent;
+                pageCount = parseInt(savedCount);
+                updateOverview();
+                document.querySelectorAll('.dropped-element').forEach(elem => {
+                    initializeDroppedElement(elem);
+                });
+            } else {
+                addNewPage();
+            }
+        }
+    </script>
+</body>
+</html>
