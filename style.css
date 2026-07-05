@@ -3,6 +3,8 @@ body{
     font-family: Arial, sans-serif;
     align-items: center;
     text-align: center;
+    align-content: center;
+    align-self: center;
 }
 button {
     background-color: #0f4fff;
@@ -25,8 +27,9 @@ hr {
     border: none;
     height: 10px;
     background-color: rgba(0, 0, 0, 0.5);
-    margin: 20px 0;
+    margin: 20px auto;
     border-radius: 10px;
+    width: 70%;
 }
 #textArea {
     width: 80%;
@@ -60,4 +63,11 @@ hr {
 
 #fontSizeSlider:hover {
     transform: scale(1.05);
+}
+
+iframe{
+    width: 600px;
+    height: 400px;
+    border-radius: 10px;
+    border: solid 5px #001e6f71;
 }
